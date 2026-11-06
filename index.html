@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#087e8b"><title>HAMS Water Hisab</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{--teal:#087e8b;--bg:#f3f7f8;--ink:#17252a;--muted:#65777d;--line:#dce6e8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink)}
+header{background:var(--teal);color:white;padding:20px 16px 24px;border-radius:0 0 22px 22px}
+header h1{margin:0;font-size:23px}header p{margin:4px 0 0;opacity:.9;font-size:13px}
+main{max-width:720px;margin:auto;padding:14px}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:-6px}
+.card,.panel{background:white;border:1px solid var(--line);border-radius:15px;padding:14px;box-shadow:0 2px 8px #1231}
+.card small{display:block;color:var(--muted);font-size:12px}.card strong{font-size:24px;display:block;margin-top:4px}
+.panel{margin-top:13px}.panel h2{font-size:17px;margin:0 0 12px}
+label{display:block;font-size:13px;font-weight:600;margin:10px 0 5px}
+input,select{width:100%;padding:12px;border:1px solid #cbd9dc;border-radius:10px;font:inherit;background:white;color:var(--ink)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button{border:0;border-radius:10px;padding:12px 14px;font:600 14px system-ui;cursor:pointer}
+.primary{background:var(--teal);color:white;width:100%;margin-top:14px}.secondary{background:#e6f3f4;color:#075c65}.danger{background:#fff0f0;color:#a32626}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.actions button{flex:1}.muted{color:var(--muted);font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600}
+.scroll{overflow-x:auto}.pill{display:inline-block;padding:3px 8px;border-radius:20px;background:#fff1d8;color:#8b5700;font-size:11px}
+.empty{color:var(--muted);font-size:13px;padding:12px 0}
+footer{text-align:center;color:var(--muted);font-size:11px;padding:20px}
+</style></head>
+<body>
+<header><h1>HAMS Water Hisab</h1><p>Daily Camper Entry • Rate ₹15 per camper</p></header>
+<main>
+<section class="cards">
+ <div class="card"><small>Aaj ka total</small><strong id="todayTotal">₹0</strong></div>
+ <div class="card"><small>Aaj ke camper</small><strong id="todayQty">0</strong></div>
+ <div class="card"><small>Total received</small><strong id="receivedTotal">₹0</strong></div>
+ <div class="card"><small>Total pending</small><strong id="pendingTotal">₹0</strong></div>
+</section>
+<section class="panel">
+<h2>Daily Entry</h2>
+<label>Date</label><input type="date" id="date">
+<label>Customer name</label><input id="customer" list="customers" placeholder="Customer ka naam likhein"><datalist id="customers"></datalist>
+<div class="row">
+ <div><label>Camper quantity</label><input type="number" id="qty" min="0" step="1" placeholder="0"></div>
+ <div><label>Rate (₹)</label><input type="number" id="rate" value="15" min="0" step="0.5"></div>
+</div>
+<div class="row">
+ <div><label>Total amount (₹)</label><input id="amount" readonly value="0"></div>
+ <div><label>Received today (₹)</label><input type="number" id="paid" min="0" step="0.5" value="0"></div>
+</div>
+<label>Note (optional)</label><input id="note" placeholder="Jaise: subah / udhari / etc.">
+<button class="primary" id="save">Save Daily Entry</button>
+<p class="muted">Pending = Total amount − Received. Customer ka purana pending bhi total balance mein jodega.</p>
+</section>
+<section class="panel">
+<h2>Customer-wise Balance</h2>
+<div class="scroll"><table><thead><tr><th>Customer</th><th>Camper</th><th>Bill</th><th>Paid</th><th>Pending</th></tr></thead><tbody id="customerRows"></tbody></table></div>
+</section>
+<section class="panel">
+<h2>Daily Records</h2>
+<label>Records date filter</label><input type="date" id="filterDate">
+<div class="scroll"><table><thead><tr><th>Date / Customer</th><th>Qty</th><th>Bill</th><th>Paid</th><th>Due</th><th></th></tr></thead><tbody id="records"></tbody></table></div>
+<div class="actions"><button class="secondary" id="allRecords">Show all dates</button><button class="secondary" id="export">Export Excel/CSV</button></div>
+</section>
+<section class="panel">
+<h2>Data backup</h2>
+<p class="muted">Data isi mobile ke browser mein save hota hai. Browser data clear karne ya app uninstall karne se pehle backup export kar lein.</p>
+<div class="actions"><button class="secondary" id="backup">Download backup</button><button class="secondary" id="restoreBtn">Restore backup</button><input type="file" id="restoreFile" accept="application/json" hidden></div>
+</section>
+<footer>HAMS Water Hisab • Rate default ₹15</footer>
+</main>
+<script>
+const $=id=>document.getElementById(id), KEY='hams_water_entries_v1';
+let entries=[]; try{entries=JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){entries=[]}
+const today=()=>new Date().toLocaleDateString('en-CA');
+$('date').value=today();$('filterDate').value=today();
+const money=n=>'₹'+(Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:2});
+function saveData(){localStorage.setItem(KEY,JSON.stringify(entries))}
+function calc(){let q=+$('qty').value||0,r=+$('rate').value||0;$('amount').value=(q*r).toFixed(2)}
+$('qty').addEventListener('input',calc);$('rate').addEventListener('input',calc);
+function render(){
+ const d=today(), todays=entries.filter(x=>x.date===d);
+ $('todayTotal').textContent=money(todays.reduce((s,x)=>s+x.amount,0));
+ $('todayQty').textContent=todays.reduce((s,x)=>s+x.qty,0);
+ $('receivedTotal').textContent=money(entries.reduce((s,x)=>s+x.paid,0));
+ $('pendingTotal').textContent=money(entries.reduce((s,x)=>s+x.amount-x.paid,0));
+ let names=[...new Set(entries.map(x=>x.customer))].sort();
+ $('customers').innerHTML=names.map(n=>`<option value="${esc(n)}">`).join('');
+ $('customerRows').innerHTML=names.map(n=>{let a=entries.filter(x=>x.customer===n),q=a.reduce((s,x)=>s+x.qty,0),b=a.reduce((s,x)=>s+x.amount,0),p=a.reduce((s,x)=>s+x.paid,0);return `<tr><td>${esc(n)}</td><td>${q}</td><td>${money(b)}</td><td>${money(p)}</td><td><b>${money(b-p)}</b></td></tr>`}).join('')||'<tr><td colspan="5" class="empty">Abhi koi record nahi hai.</td></tr>';
+ let f=$('filterDate').value, shown=entries.map((x,i)=>({...x,_i:i})).filter(x=>!f||x.date===f).sort((a,b)=>b.date.localeCompare(a.date)||b._i-a._i);
+ $('records').innerHTML=shown.map(x=>`<tr><td>${x.date}<br><b>${esc(x.customer)}</b>${x.note?'<br><span class="muted">'+esc(x.note)+'</span>':''}</td><td>${x.qty}</td><td>${money(x.amount)}</td><td>${money(x.paid)}</td><td>${money(x.amount-x.paid)}</td><td><button class="danger" onclick="del(${x._i})">×</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">Is date ka record nahi hai.</td></tr>';
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('save').onclick=()=>{let customer=$('customer').value.trim(),qty=+$('qty').value,rate=+$('rate').value,paid=+$('paid').value,amount=qty*rate;if(!customer)return alert('Customer ka naam likhein.');if(!Number.isFinite(qty)||qty<=0)return alert('Camper quantity 1 ya usse zyada honi chahiye.');if(paid<0||paid>amount)return alert('Received amount 0 se total amount ke beech hona chahiye.');entries.push({date:$('date').value||today(),customer,qty,rate,amount,paid,note:$('note').value.trim()});saveData();$('qty').value='';$('paid').value='0';$('note').value='';calc();render();alert('Entry save ho gayi.');};
+window.del=i=>{if(confirm('Kya ye record delete karna hai?')){entries.splice(i,1);saveData();render()}};
+$('filterDate').onchange=render;$('allRecords').onclick=()=>{$('filterDate').value='';render()};
+function download(name,content,type){let a=document.createElement('a'),u=URL.createObjectURL(new Blob([content],{type}));a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+$('export').onclick=()=>{let rows=[['Date','Customer','Camper','Rate','Total','Received','Pending','Note'],...entries.map(x=>[x.date,x.customer,x.qty,x.rate,x.amount,x.paid,x.amount-x.paid,x.note])];let csv='\ufeff'+rows.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n');download('HAMS-Water-Hisab.csv',csv,'text/csv;charset=utf-8')};
+$('backup').onclick=()=>download('HAMS-Water-Backup.json',JSON.stringify(entries,null,2),'application/json');
+$('restoreBtn').onclick=()=>$('restoreFile').click();
+$('restoreFile').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let data=JSON.parse(await f.text());if(!Array.isArray(data))throw 0;if(confirm('Current records replace ho jayenge. Continue?')){entries=data;saveData();render();alert('Backup restore ho gaya.')}}catch(err){alert('Backup file sahi nahi hai.')}e.target.value=''};
+render();
+if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+</script></body></html>
